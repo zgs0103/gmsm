@@ -27,13 +27,13 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/tjfoc/gmsm/sm3"
+	"github.com/zgs0103/gmsm/sm3"
 )
 
 var (
 	default_uid = []byte{0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38}
-	C1C3C2=0
-	C1C2C3=1
+	C1C3C2      = 0
+	C1C2C3      = 1
 )
 
 type PublicKey struct {
@@ -74,6 +74,14 @@ func (priv *PrivateKey) Sign(random io.Reader, msg []byte, signer crypto.SignerO
 	return asn1.Marshal(sm2Signature{r, s})
 }
 
+func (priv *PrivateKey) SignDigest(random io.Reader, digest []byte, signer crypto.SignerOpts) ([]byte, error) {
+	r, s, err := Sm2SignDigest(priv, digest, nil, random)
+	if err != nil {
+		return nil, err
+	}
+	return asn1.Marshal(sm2Signature{r, s})
+}
+
 func (pub *PublicKey) Verify(msg []byte, sign []byte) bool {
 	var sm2Sign sm2Signature
 	_, err := asn1.Unmarshal(sign, &sm2Sign)
@@ -81,6 +89,15 @@ func (pub *PublicKey) Verify(msg []byte, sign []byte) bool {
 		return false
 	}
 	return Sm2Verify(pub, msg, default_uid, sm2Sign.R, sm2Sign.S)
+}
+
+func (pub *PublicKey) VerifyDigest(digest []byte, sign []byte) bool {
+	var sm2Sign sm2Signature
+	_, err := asn1.Unmarshal(sign, &sm2Sign)
+	if err != nil {
+		return false
+	}
+	return Sm2VerifyDigest(pub, digest, default_uid, sm2Sign.R, sm2Sign.S)
 }
 
 func (pub *PublicKey) Sm3Digest(msg, uid []byte) ([]byte, error) {
@@ -200,6 +217,72 @@ func Sm2Verify(pub *PublicKey, msg, uid []byte, r, s *big.Int) bool {
 	return x.Cmp(r) == 0
 }
 
+func Sm2SignDigest(priv *PrivateKey, digest, uid []byte, random io.Reader) (r, s *big.Int, err error) {
+	e := new(big.Int).SetBytes(digest)
+	c := priv.PublicKey.Curve
+	N := c.Params().N
+	if N.Sign() == 0 {
+		return nil, nil, errZeroParam
+	}
+	var k *big.Int
+	for { // 调整算法细节以实现SM2
+		for {
+			k, err = randFieldElement(c, random)
+			if err != nil {
+				r = nil
+				return
+			}
+			r, _ = priv.Curve.ScalarBaseMult(k.Bytes())
+			r.Add(r, e)
+			r.Mod(r, N)
+			if r.Sign() != 0 {
+				if t := new(big.Int).Add(r, k); t.Cmp(N) != 0 {
+					break
+				}
+			}
+
+		}
+		rD := new(big.Int).Mul(priv.D, r)
+		s = new(big.Int).Sub(k, rD)
+		d1 := new(big.Int).Add(priv.D, one)
+		d1Inv := new(big.Int).ModInverse(d1, N)
+		s.Mul(s, d1Inv)
+		s.Mod(s, N)
+		if s.Sign() != 0 {
+			break
+		}
+	}
+	return
+}
+func Sm2VerifyDigest(pub *PublicKey, digest, uid []byte, r, s *big.Int) bool {
+	e := new(big.Int).SetBytes(digest)
+	c := pub.Curve
+	N := c.Params().N
+	one := new(big.Int).SetInt64(1)
+	if r.Cmp(one) < 0 || s.Cmp(one) < 0 {
+		return false
+	}
+	if r.Cmp(N) >= 0 || s.Cmp(N) >= 0 {
+		return false
+	}
+	if len(uid) == 0 {
+		uid = default_uid
+	}
+	t := new(big.Int).Add(r, s)
+	t.Mod(t, N)
+	if t.Sign() == 0 {
+		return false
+	}
+	var x *big.Int
+	x1, y1 := c.ScalarBaseMult(s.Bytes())
+	x2, y2 := c.ScalarMult(pub.X, pub.Y, t.Bytes())
+	x, _ = c.Add(x1, y1, x2, y2)
+
+	x.Add(x, e)
+	x.Mod(x, N)
+	return x.Cmp(r) == 0
+}
+
 /*
     za, err := ZA(pub, uid)
 	if err != nil {
@@ -244,7 +327,7 @@ func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
  *  hash
  *  CipherText
  */
-func Encrypt(pub *PublicKey, data []byte, random io.Reader,mode int) ([]byte, error) {
+func Encrypt(pub *PublicKey, data []byte, random io.Reader, mode int) ([]byte, error) {
 	length := len(data)
 	for {
 		c := []byte{}
@@ -287,42 +370,40 @@ func Encrypt(pub *PublicKey, data []byte, random io.Reader,mode int) ([]byte, er
 		for i := 0; i < length; i++ {
 			c[96+i] ^= data[i]
 		}
-		switch mode{
-	
+		switch mode {
+
 		case C1C3C2:
 			return append([]byte{0x04}, c...), nil
 		case C1C2C3:
 			c1 := make([]byte, 64)
-			c2 := make([]byte, len(c) - 96)
+			c2 := make([]byte, len(c)-96)
 			c3 := make([]byte, 32)
-			copy(c1, c[:64])//x1,y1
-			copy(c3, c[64:96])//hash
-			copy(c2, c[96:])//密文
+			copy(c1, c[:64])   //x1,y1
+			copy(c3, c[64:96]) //hash
+			copy(c2, c[96:])   //密文
 			ciphertext := []byte{}
 			ciphertext = append(ciphertext, c1...)
 			ciphertext = append(ciphertext, c2...)
 			ciphertext = append(ciphertext, c3...)
 			return append([]byte{0x04}, ciphertext...), nil
-    	default:
+		default:
 			return append([]byte{0x04}, c...), nil
+		}
 	}
 }
-}
 
-
-
-func Decrypt(priv *PrivateKey, data []byte,mode int) ([]byte, error) {
+func Decrypt(priv *PrivateKey, data []byte, mode int) ([]byte, error) {
 	switch mode {
 	case C1C3C2:
 		data = data[1:]
-	case  C1C2C3:
+	case C1C2C3:
 		data = data[1:]
 		c1 := make([]byte, 64)
-		c2 := make([]byte, len(data) - 96)
+		c2 := make([]byte, len(data)-96)
 		c3 := make([]byte, 32)
-		copy(c1, data[:64])//x1,y1
-		copy(c2, data[64:len(data) - 32])//密文
-		copy(c3, data[len(data) - 32:])//hash
+		copy(c1, data[:64])             //x1,y1
+		copy(c2, data[64:len(data)-32]) //密文
+		copy(c3, data[len(data)-32:])   //hash
 		c := []byte{}
 		c = append(c, c1...)
 		c = append(c, c3...)
@@ -361,8 +442,6 @@ func Decrypt(priv *PrivateKey, data []byte,mode int) ([]byte, error) {
 	}
 	return c, nil
 }
-
-
 
 // keyExchange 为SM2密钥交换算法的第二部和第三步复用部分，协商的双方均调用此函数计算共同的字节串
 // klen: 密钥长度
@@ -479,7 +558,7 @@ func zeroByteSlice() []byte {
 sm2加密，返回asn.1编码格式的密文内容
 */
 func EncryptAsn1(pub *PublicKey, data []byte, rand io.Reader) ([]byte, error) {
-	cipher, err := Encrypt(pub, data, rand,C1C3C2)
+	cipher, err := Encrypt(pub, data, rand, C1C3C2)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +573,7 @@ func DecryptAsn1(pub *PrivateKey, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Decrypt(pub, cipher,C1C3C2)
+	return Decrypt(pub, cipher, C1C3C2)
 }
 
 /*
@@ -670,5 +749,5 @@ func getLastBit(a *big.Int) uint {
 
 // crypto.Decrypter
 func (priv *PrivateKey) Decrypt(_ io.Reader, msg []byte, _ crypto.DecrypterOpts) (plaintext []byte, err error) {
-	return Decrypt(priv, msg,C1C3C2)
+	return Decrypt(priv, msg, C1C3C2)
 }

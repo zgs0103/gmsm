@@ -3,14 +3,14 @@ package websvr
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/tjfoc/gmsm/x509"
+	"github.com/zgs0103/gmsm/x509"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"testing"
 	"time"
 
-	"github.com/tjfoc/gmsm/gmtls"
+	"github.com/zgs0103/gmsm/gmtls"
 )
 
 const (
