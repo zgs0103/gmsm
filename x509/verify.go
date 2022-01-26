@@ -48,6 +48,15 @@ const (
 	// NameMismatch results when the subject name of a parent certificate
 	// does not match the issuer name in the child.
 	NameMismatch
+	// NameConstraintsWithoutSANs results when a leaf certificate doesn't
+	// contain a Subject Alternative Name extension, but a CA certificate
+	// contains name constraints, and the Common Name can be interpreted as
+	// a hostname.
+	//
+	// This error is only returned when legacy Common Name matching is enabled
+	// by setting the GODEBUG environment variable to "x509ignoreCN=1". This
+	// setting might be removed in the future.
+	NameConstraintsWithoutSANs
 )
 
 // CertificateInvalidError results when an odd error occurs. Users of this
@@ -71,6 +80,8 @@ func (e CertificateInvalidError) Error() string {
 		return "x509: certificate specifies an incompatible key usage"
 	case NameMismatch:
 		return "x509: issuer name does not match subject from issuing certificate"
+	case NameConstraintsWithoutSANs:
+		return "x509: issuer has name constraints but leaf doesn't have a SAN extension"
 	}
 	return "x509: unknown error"
 }
