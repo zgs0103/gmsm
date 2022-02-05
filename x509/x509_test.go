@@ -22,6 +22,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"reflect"
@@ -148,6 +149,91 @@ func TestX509(t *testing.T) {
 		t.Fatal("failed to read cert file")
 	}
 	err = cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature)
+	if err != nil {
+		t.Fatal(err)
+	} else {
+		fmt.Printf("CheckSignature ok\n")
+	}
+}
+
+func TestCheckSignature(t *testing.T) {
+	//fileCont, err := ioutil.ReadFile("G:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/cacerts/ca.org1.example.com-cert.pem")
+	fileCont, err := ioutil.ReadFile("G:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/signcerts/peer0.org1.example.com-cert.pem")
+	if err != nil {
+		fmt.Printf("File not found.\n")
+	}
+	cert, err := ReadCertificateFromPem(fileCont)
+	if err != nil {
+		t.Fatal("failed to read cert file")
+	}
+	err = cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature)
+	if err != nil {
+		t.Fatal(err)
+	} else {
+		fmt.Printf("CheckSignature ok\n")
+	}
+}
+
+func TestCheckSignature1(t *testing.T) {
+	priv, _ := sm2.GenerateKey(nil)
+	templateCa := Certificate{
+		SerialNumber:          big.NewInt(-1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Date(2021, time.October, 10, 12, 1, 1, 1, time.UTC),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              KeyUsageDigitalSignature | KeyUsageKeyEncipherment | KeyUsageCertSign | KeyUsageCRLSign,
+		ExtKeyUsage:           []ExtKeyUsage{ExtKeyUsageClientAuth, ExtKeyUsageServerAuth},
+		Subject: pkix.Name{
+			CommonName:   "ca-test",
+			Organization: []string{"TEST"},
+			Country:      []string{"China"},
+		},
+		SubjectKeyId:       []byte{1, 2, 3, 4},
+		SignatureAlgorithm: SM2WithSM3,
+	}
+
+	certpem, err := CreateCertificateToPem(&templateCa, &templateCa, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatal("failed to create cert file")
+	}
+	cert, err := ReadCertificateFromPem(certpem)
+	if err != nil {
+		t.Fatal("failed to read cert file")
+	}
+	/*err = cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature)
+	if err != nil {
+		t.Fatal(err)
+	} else {
+		fmt.Printf("CheckSignature ok\n")
+	}*/
+
+	privNew, _ := sm2.GenerateKey(nil)
+	templateNew := Certificate{
+		SerialNumber:          big.NewInt(-1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Date(2021, time.October, 10, 12, 1, 1, 1, time.UTC),
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		KeyUsage:              KeyUsageDigitalSignature,
+		ExtKeyUsage:           []ExtKeyUsage{},
+		Subject: pkix.Name{
+			CommonName:   "generate-test",
+			Organization: []string{"TEST"},
+			Country:      []string{"China"},
+		},
+		SubjectKeyId:       []byte{5, 6, 7, 8},
+		SignatureAlgorithm: SM2WithSM3,
+	}
+	certpemNew, err := CreateCertificateToPem(&templateNew, cert, &privNew.PublicKey, priv)
+	if err != nil {
+		t.Fatal("failed to create cert file")
+	}
+	certNew, err := ReadCertificateFromPem(certpemNew)
+	if err != nil {
+		t.Fatal("failed to read cert file")
+	}
+	err = cert.CheckSignature(certNew.SignatureAlgorithm, certNew.RawTBSCertificate, certNew.Signature)
 	if err != nil {
 		t.Fatal(err)
 	} else {
