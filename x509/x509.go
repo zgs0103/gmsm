@@ -37,6 +37,7 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -849,6 +850,7 @@ type Certificate struct {
 	DNSNames       []string
 	EmailAddresses []string
 	IPAddresses    []net.IP
+	URIs           []*url.URL
 
 	// Name constraints
 	PermittedDNSDomainsCritical bool // if true then the name constraints are marked critical.
