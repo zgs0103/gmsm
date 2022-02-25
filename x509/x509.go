@@ -2045,6 +2045,7 @@ type CertificateRequest struct {
 	DNSNames       []string
 	EmailAddresses []string
 	IPAddresses    []net.IP
+	URIs           []*url.URL
 }
 
 // These structures reflect the ASN.1 structure of X.509 certificate
