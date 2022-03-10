@@ -157,8 +157,8 @@ func TestX509(t *testing.T) {
 }
 
 func TestCheckSignature(t *testing.T) {
-	//fileCont, err := ioutil.ReadFile("G:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/cacerts/ca.org1.example.com-cert.pem")
-	fileCont, err := ioutil.ReadFile("G:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/signcerts/peer0.org1.example.com-cert.pem")
+	fileCont, err := ioutil.ReadFile("d:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/cacerts/ca.org1.example.com-cert.pem")
+	//fileCont, err := ioutil.ReadFile("d:/temp/cryptogen/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp/signcerts/peer0.org1.example.com-cert.pem")
 	if err != nil {
 		fmt.Printf("File not found.\n")
 	}
@@ -532,5 +532,43 @@ func TestCreateRevocationList(t *testing.T) {
 					parsedCRL.TBSCertList.Extensions[2:], tc.template.ExtraExtensions)
 			}
 		})
+	}
+}
+
+func TestCertificate_CheckSignature(t *testing.T) {
+	var csr = `-----BEGIN CERTIFICATE REQUEST-----
+MIIBbTCCARMCAQAwaDELMAkGA1UEBhMCVVMxFzAVBgNVBAgTDk5vcnRoIENhcm9s
+aW5hMRQwEgYDVQQKEwtIeXBlcmxlZGdlcjEPMA0GA1UECxMGRmFicmljMRkwFwYD
+VQQDExBmYWJyaWMtY2Etc2VydmVyMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE
+iptLUjS9w/P02hS6Z/bpIj5usFtwlX+PQiWq10KApCk3n3gMbkuGSCvX+N7x761w
+fMIgg7/mMldJAGYCm840rKBJMEcGCSqGSIb3DQEJDjE6MDgwJQYDVR0RBB4wHIIP
+TEFQVE9QLTNKMUtGSUlRgglsb2NhbGhvc3QwDwYDVR0TBAgwBgEB/wIBATAKBggq
+gRzPVQGDdQNIADBFAiBWN+3mUQEQch7n685IwTIlGXm4PIVvShX9BFw3F45cRwIh
+AO/rRQpOYUZxl0+TxmRFg9e3pVYvYNihmYkphG0z9wQN
+-----END CERTIFICATE REQUEST-----`
+	req, err := ReadCertificateRequestFromPem([]byte(csr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = req.CheckSignature()
+	if err != nil {
+		t.Fatalf("Request CheckSignature error:%v", err)
+	} else {
+		fmt.Printf("CheckSignature ok\n")
+	}
+}
+
+func TestMarshalAndParse(t *testing.T) {
+	priv, err := sm2.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := MarshalSm2UnecryptedPrivateKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ParsePKCS8UnecryptedPrivateKey(raw)
+	if err != nil {
+		t.Fatal(err)
 	}
 }

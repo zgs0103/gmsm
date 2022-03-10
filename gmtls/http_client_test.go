@@ -122,7 +122,8 @@ func TestSimpleNewHTTPSClient1(t *testing.T) {
 	*/
 	time.Sleep(time.Second)
 	httpClient := NewCustomHTTPSClient(nil)
-	response, err := httpClient.Get("http://localhost:50053")
+	//response, err := httpClient.Get("http://localhost:50053")
+	response, err := httpClient.Get("https://ca.example.com:7054")
 	if err != nil {
 		t.Fatal(err)
 	}
